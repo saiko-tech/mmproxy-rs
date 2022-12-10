@@ -84,10 +84,23 @@ async fn main() {
             return;
         }
     };
-
     if args.help {
         return;
     }
 
+    let allowed_subnets = match args.allowed_subnets {
+        Some(ref path) => {
+            match misc::parse_allowed_subnets(&path) {
+                Ok(data) => Some(data),
+                Err(why) => {
+                    log::error!("{}", why);
+                    return;
+                }
+            }
+        }
+        None => None
+    };
+
     dbg!(&args);
+    dbg!(&allowed_subnets);
 }
