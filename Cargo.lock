@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "argwerk"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c8afb154b22e25692fe2d5f30ae3e29344d3ebe546b7dce3c4063aab13b5775"
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -158,6 +164,7 @@ dependencies = [
 name = "mmproxy"
 version = "0.1.0"
 dependencies = [
+ "argwerk",
  "env_logger",
  "log",
  "tokio",
