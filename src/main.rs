@@ -22,7 +22,7 @@ async fn main() {
             ipv4_fwd: String = "127.0.0.1:443".to_string(),
             ipv6_fwd: String = "[::1]:443".to_string(),
             allowed_subnets: Option<String>,
-            close_after: i32 = 60,
+            close_after: u32 = 60,
             #[required = "mark is required"]
             mark: i32,
             listen: String = "0.0.0.0:8443".to_string(),
