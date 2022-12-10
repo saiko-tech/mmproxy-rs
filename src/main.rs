@@ -4,21 +4,11 @@
     unused_imports,
     unused_variables)]
 
+mod misc;
+
 use env_logger::{Env, DEFAULT_FILTER_ENV};
+use misc::Protocol;
 use std::io;
-
-// TODO: move this into another module
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Protocol {
-    Tcp,
-    Udp,
-}
-
-impl Default for Protocol {
-    fn default() -> Self {
-        Self::Tcp
-    }
-}
 
 #[tokio::main]
 async fn main() {
