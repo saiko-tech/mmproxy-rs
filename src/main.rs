@@ -26,29 +26,43 @@ async fn main() {
 
     argwerk::define! {
         #[derive(Default)]
-        #[usage = "mmproxy [-h]"]
+        #[usage = "mmproxy [options] -m <mark>"]
         struct Args {
             help: bool,
+            close_after: i32 = 60,
+            #[required = "mark is required"]
             mark: i32,
-            protocol: Option<Protocol> = Some(Protocol::Tcp)
+            listen: String = "0.0.0.0:8443".to_string(),
+            protocol: Protocol = Protocol::Tcp
         }
         /// Prints the help.
         ["-h" | "--help"] => {
+            println!("{}", Args::help());
             help = true;
+        }
+        /// Number of seconds after which UDP socket will be cleaned up. (default: 60)
+        ["-c" | "--close-after", n] => {
+            close_after = str::parse(&n)?;
+        }
+        /// Address the proxy listens on. (default: "0.0.0.0:8443")
+        ["-l" | "--listen", #[option] string] => {
+            if let Some(string) = string {
+                listen = string;
+            }
         }
         /// Protocol that will be proxied: tcp, udp. (default: tcp)
         ["-p" | "--protocol", #[option] p] => {
             if let Some(p) = p {
                 protocol = match &p[..] {
-                    "tcp" => Some(Protocol::Tcp),
-                    "udp" => Some(Protocol::Udp),
-                    _ => None,
+                    "tcp" => Protocol::Tcp,
+                    "udp" => Protocol::Udp,
+                    _ => return Err(format!("invalid protocol value: {p}").into()),
                 };
             }
         }
         /// The mark that will be set on outbound packets.
         ["-m" | "--mark", n] => {
-            mark = str::parse(&n)?;
+            mark = Some(str::parse::<i32>(&n)?);
         }
     }
 
@@ -62,11 +76,6 @@ async fn main() {
     };
 
     if args.help {
-        println!("{}", Args::help());
-        return;
-    }
-    if args.protocol.is_none() {
-        log::error!("invalid protocol argument");
         return;
     }
 
