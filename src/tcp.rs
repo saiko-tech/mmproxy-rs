@@ -1,7 +1,16 @@
-use std::io;
-use tokio::net::TcpSocket;
+use crate::args::Args;
+use crate::misc::check_origin_allowed;
 
-pub async fn listen(args: &crate::args::Args) -> io::Result<()> {
+use std::io;
+use std::sync::Arc;
+
+use cidr::IpCidr;
+use tokio::net::{TcpSocket, TcpStream};
+
+pub async fn listen(args: Args, allowed_subnets: Option<Vec<IpCidr>>) -> io::Result<()> {
+    // TODO: using sync::Arc might have cause performance penalties
+    let args = Arc::new(args);
+
     // TODO: this bit should be shared between the udp listener
     let addr = match args.listen.parse() {
         Ok(addr) => addr,
@@ -21,10 +30,27 @@ pub async fn listen(args: &crate::args::Args) -> io::Result<()> {
     socket.set_reuseaddr(true)?;
     socket.bind(addr)?;
 
-    // loop {
-    //     let (sock, addr) = listener.accept().await?;
-    //     println!("{addr}");
-    // }
+    let listener = socket.listen(args.listeners)?;
+    log::info!("listening on: {}", listener.local_addr()?);
 
-    Ok(())
+    loop {
+        let (conn, addr) = listener.accept().await?;
+
+        if let Some(ref allowed_nets) = allowed_subnets {
+            let ip_addr = addr.ip();
+
+            if !check_origin_allowed(&ip_addr, allowed_nets) {
+                log::debug!("connection origin is not allowed");
+                continue;
+            }
+        }
+
+        let cargs = args.clone();
+        tokio::spawn(async move {
+            tcp_handle_connection(conn, cargs).await;
+        });
+    }
 }
+
+// TODO: figure out how to do proper error handling for this function
+async fn tcp_handle_connection(conn: TcpStream, args: Arc<Args>) {}

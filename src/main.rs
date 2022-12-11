@@ -17,19 +17,27 @@ async fn main() {
 
     // parse all of the command line arguments
     let args = match args::Args::args() {
-        Ok(args) => args,
+        Ok(args) => {
+            if args.help {
+                return;
+            }
+            args
+        }
         Err(why) => {
             log::error!("{}", why);
             return;
         }
     };
-    if args.help {
-        return;
-    }
 
     let allowed_subnets = match args.allowed_subnets {
         Some(ref path) => match misc::parse_allowed_subnets(&path) {
-            Ok(data) => Some(data),
+            Ok(data) => {
+                if data.len() > 0 {
+                    Some(data)
+                } else {
+                    None
+                }
+            }
             Err(why) => {
                 log::error!("{}", why);
                 return;
@@ -42,7 +50,7 @@ async fn main() {
     dbg!(&allowed_subnets);
 
     let result = match args.protocol {
-        Protocol::Tcp => tcp_listen(&args).await,
+        Protocol::Tcp => tcp_listen(args, allowed_subnets).await,
         Protocol::Udp => unimplemented!(),
     };
 
