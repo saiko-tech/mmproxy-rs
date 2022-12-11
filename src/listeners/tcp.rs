@@ -34,9 +34,18 @@ pub async fn listen(args: Args) -> io::Result<()> {
 
         let args_clone = args.clone();
         tokio::spawn(async move {
-            tcp_handle_connection(conn, args_clone).await;
+            if let Err(err) = tcp_handle_connection(conn, args_clone).await {
+                log::error!("{err}");
+            }
         });
     }
 }
 
-async fn tcp_handle_connection(conn: TcpStream, args: Args) {}
+async fn tcp_handle_connection(conn: TcpStream, args: Args) -> io::Result<()> {
+    let mut buffer = [0u8; u16::MAX as usize];
+    let read_bytes = conn.try_read(&mut buffer)?;
+
+    println!("{}", String::from_utf8_lossy(&buffer[..read_bytes]));
+
+    Ok(())
+}
