@@ -28,28 +28,10 @@ async fn main() {
         }
     };
 
-    let allowed_subnets = match args.allowed_subnets {
-        Some(ref path) => match util::parse_allowed_subnets(&path) {
-            Ok(data) => {
-                if data.len() > 0 {
-                    Some(data)
-                } else {
-                    None
-                }
-            }
-            Err(why) => {
-                log::error!("{}", why);
-                return;
-            }
-        },
-        None => None,
-    };
-
     dbg!(&args);
-    dbg!(&allowed_subnets);
 
     let result = match args.protocol {
-        Protocol::Tcp => listeners::tcp_listen(args, allowed_subnets).await,
+        Protocol::Tcp => listeners::tcp_listen(args).await,
         Protocol::Udp => unimplemented!(),
     };
 
