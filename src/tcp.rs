@@ -1,14 +1,30 @@
 use std::io;
-use tokio::net::TcpListener;
+use tokio::net::TcpSocket;
 
-// TODO: set so_reuseaddr if number of listeners are going to be
-// more than 1
 pub async fn listen(args: &crate::args::Args) -> io::Result<()> {
-    let listener = TcpListener::bind(&args.listen).await?;
-    println!("nice");
+    // TODO: this bit should be shared between the udp listener
+    let addr = match args.listen.parse() {
+        Ok(addr) => addr,
+        Err(why) => {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("couldn't parse the listen addresss: {why}"),
+            ))
+        }
+    };
+    let socket = TcpSocket::new_v4()?;
 
-    loop {
-        let (sock, addr) = listener.accept().await?;
-        println!("{addr}");
+    if args.listeners > 1 {
+        socket.set_reuseport(true)?;
     }
+    // might want to remove this
+    socket.set_reuseaddr(true)?;
+    socket.bind(addr)?;
+
+    // loop {
+    //     let (sock, addr) = listener.accept().await?;
+    //     println!("{addr}");
+    // }
+
+    Ok(())
 }

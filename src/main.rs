@@ -41,8 +41,13 @@ async fn main() {
     dbg!(&args);
     dbg!(&allowed_subnets);
 
-    match args.protocol {
-        Protocol::Tcp => tcp_listen(&args).await.unwrap(),
+    let result = match args.protocol {
+        Protocol::Tcp => tcp_listen(&args).await,
         Protocol::Udp => unimplemented!(),
+    };
+
+    if let Err(why) = result {
+        log::error!("{why}");
+        return;
     }
 }
