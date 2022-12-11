@@ -1,5 +1,5 @@
 use crate::args::Args;
-use crate::misc::check_origin_allowed;
+use crate::util::check_origin_allowed;
 
 use std::io;
 use std::sync::Arc;

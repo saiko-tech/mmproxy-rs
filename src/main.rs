@@ -2,14 +2,14 @@
 #![allow(dead_code, unused_imports, unused_variables)]
 
 mod args;
-mod misc;
 mod tcp;
+mod util;
 
 use env_logger::{Env, DEFAULT_FILTER_ENV};
 use std::io;
 
-use misc::Protocol;
 use tcp::listen as tcp_listen;
+use util::Protocol;
 
 #[tokio::main]
 async fn main() {
@@ -30,7 +30,7 @@ async fn main() {
     };
 
     let allowed_subnets = match args.allowed_subnets {
-        Some(ref path) => match misc::parse_allowed_subnets(&path) {
+        Some(ref path) => match util::parse_allowed_subnets(&path) {
             Ok(data) => {
                 if data.len() > 0 {
                     Some(data)
