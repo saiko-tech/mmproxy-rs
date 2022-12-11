@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 
 argwerk::define! {
     #[usage = "mmproxy [-h] [options] -m <mark>"]
+    #[derive(Clone)]
     pub struct Args {
         pub help: bool = false,
         pub ipv4_fwd: SocketAddr = "127.0.0.1:443".parse().unwrap(),
