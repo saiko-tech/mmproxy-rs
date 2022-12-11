@@ -3,6 +3,7 @@ use std::io::{self, Read};
 use std::str::FromStr;
 
 use cidr::IpCidr;
+use std::net::IpAddr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
@@ -32,4 +33,14 @@ pub fn parse_allowed_subnets(path: &str) -> io::Result<Vec<IpCidr>> {
     }
 
     Ok(ret)
+}
+
+pub fn check_origin_allowed(addr: &IpAddr, subnets: &[IpCidr]) -> bool {
+    for net in subnets.iter() {
+        if net.contains(addr) {
+            return true;
+        }
+    }
+
+    false
 }
