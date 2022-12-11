@@ -2,13 +2,12 @@
 #![allow(dead_code, unused_imports, unused_variables)]
 
 mod args;
-mod tcp;
+mod listeners;
 mod util;
 
 use env_logger::{Env, DEFAULT_FILTER_ENV};
 use std::io;
 
-use tcp::listen as tcp_listen;
 use util::Protocol;
 
 #[tokio::main]
@@ -50,7 +49,7 @@ async fn main() {
     dbg!(&allowed_subnets);
 
     let result = match args.protocol {
-        Protocol::Tcp => tcp_listen(args, allowed_subnets).await,
+        Protocol::Tcp => listeners::tcp_listen(args, allowed_subnets).await,
         Protocol::Udp => unimplemented!(),
     };
 
