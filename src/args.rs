@@ -12,7 +12,7 @@ argwerk::define! {
         #[required = "mark is required"]
         pub mark: i32,
         pub listen: String = "0.0.0.0:8443".to_string(),
-        pub listeners: i32 = 1,
+        pub listeners: u32 = 1,
         pub protocol: Protocol = Protocol::Tcp
     }
     /// Prints the help.
