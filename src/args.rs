@@ -1,16 +1,14 @@
-use crate::util;
-use crate::Protocol;
+use crate::{util, Protocol};
 use cidr::IpCidr;
 use std::net::SocketAddr;
 
 argwerk::define! {
-    // #[derive(Default)]
-    #[usage = "mmproxy [options] -m <mark>"]
+    #[usage = "mmproxy [-h] [options] -m <mark>"]
     pub struct Args {
-        pub help: bool,
+        pub help: bool = false,
         pub ipv4_fwd: SocketAddr = "127.0.0.1:443".parse().unwrap(),
         pub ipv6_fwd: SocketAddr = "[::1]:443".parse().unwrap(),
-        pub allowed_subnets: Option<Vec<IpCidr>>,
+        pub allowed_subnets: Option<Vec<IpCidr>> = None,
         pub close_after: u32 = 60,
         #[required = "mark is required"]
         pub mark: i32,
@@ -63,5 +61,17 @@ argwerk::define! {
     /// The mark that will be set on outbound packets.
     ["-m" | "--mark", n] => {
         mark = Some(str::parse::<i32>(&n)?);
+    }
+}
+
+pub fn parse_args() -> Result<Args, argwerk::Error> {
+    match Args::args() {
+        Ok(args) => {
+            if args.help {
+                std::process::exit(1);
+            }
+            Ok(args)
+        }
+        Err(err) => Err(err),
     }
 }

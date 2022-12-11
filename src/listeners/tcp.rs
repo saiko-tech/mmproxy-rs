@@ -8,14 +8,12 @@ use cidr::IpCidr;
 use tokio::net::{TcpSocket, TcpStream};
 
 pub async fn listen(args: Args) -> io::Result<()> {
-    // TODO: using sync::Arc might have cause performance penalties
     let args = Arc::new(args);
     let socket = TcpSocket::new_v4()?;
 
     if args.listeners > 1 {
         socket.set_reuseport(true)?;
     }
-    // might want to remove this
     socket.set_reuseaddr(true)?;
     socket.bind(args.listen_addr)?;
 
@@ -34,12 +32,11 @@ pub async fn listen(args: Args) -> io::Result<()> {
             }
         }
 
-        let cargs = args.clone();
+        let args_clone = args.clone();
         tokio::spawn(async move {
-            tcp_handle_connection(conn, cargs).await;
+            tcp_handle_connection(conn, args_clone).await;
         });
     }
 }
 
-// TODO: figure out how to do proper error handling for this function
 async fn tcp_handle_connection(conn: TcpStream, args: Arc<Args>) {}
