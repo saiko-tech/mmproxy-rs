@@ -1,19 +1,18 @@
 use crate::args::Args;
 use crate::util::check_origin_allowed;
 
-use std::io;
-use std::sync::Arc;
+use std::{io, net::SocketAddr};
 
 use cidr::IpCidr;
 use tokio::net::{TcpSocket, TcpStream};
 
 pub async fn listen(args: Args) -> io::Result<()> {
-    let args = Arc::new(args);
-    let socket = TcpSocket::new_v4()?;
+    let socket = match args.listen_addr {
+        SocketAddr::V4(_) => TcpSocket::new_v4()?,
+        SocketAddr::V6(_) => TcpSocket::new_v6()?,
+    };
 
-    if args.listeners > 1 {
-        socket.set_reuseport(true)?;
-    }
+    socket.set_reuseport(args.listeners > 1)?;
     socket.set_reuseaddr(true)?;
     socket.bind(args.listen_addr)?;
 
@@ -22,6 +21,7 @@ pub async fn listen(args: Args) -> io::Result<()> {
 
     loop {
         let (conn, addr) = listener.accept().await?;
+        log::info!("new connection: {addr}");
 
         if let Some(ref allowed_subnets) = args.allowed_subnets {
             let ip_addr = addr.ip();
@@ -39,4 +39,4 @@ pub async fn listen(args: Args) -> io::Result<()> {
     }
 }
 
-async fn tcp_handle_connection(conn: TcpStream, args: Arc<Args>) {}
+async fn tcp_handle_connection(conn: TcpStream, args: Args) {}
