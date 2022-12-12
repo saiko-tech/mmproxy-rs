@@ -46,8 +46,8 @@ async fn tcp_handle_connection(
     args: Args,
 ) -> io::Result<()> {
     let mut buffer = [0u8; u16::MAX as usize];
+    conn.readable().await?;
     let read_bytes = conn.try_read(&mut buffer)?;
-    // let read_bytes = tokio::io::copy_buf(mut &mut buffer, &mut conn).await?;
 
     let (addr_pair, mut rest) = parse_proxy_protocol_header(&buffer[..read_bytes as usize])?;
     let src_addr = match addr_pair {
@@ -71,5 +71,6 @@ async fn tcp_handle_connection(
 
     tokio::io::copy_buf(&mut rest, &mut upstream_conn).await?;
     tokio::io::copy_bidirectional(&mut conn, &mut upstream_conn).await?;
+
     Ok(())
 }
