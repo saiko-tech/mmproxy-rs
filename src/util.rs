@@ -1,9 +1,10 @@
 use std::fs::File;
 use std::io::{self, Read};
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 
 use cidr::IpCidr;
-use std::net::IpAddr;
+use proxy_protocol::{version1 as v1, version2 as v2, ProxyHeader};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
@@ -43,4 +44,37 @@ pub fn check_origin_allowed(addr: &IpAddr, subnets: &[IpCidr]) -> bool {
     }
 
     false
+}
+
+pub fn parse_proxy_protocol_header(
+    mut buffer: &[u8],
+) -> io::Result<(SocketAddr, SocketAddr, &[u8])> {
+    match proxy_protocol::parse(&mut buffer) {
+        Ok(result) => match result {
+            ProxyHeader::Version1 { addresses } => match addresses {
+                v1::ProxyAddresses::Unknown => todo!(),
+                v1::ProxyAddresses::Ipv4 {
+                    source,
+                    destination,
+                } => Ok((SocketAddr::V4(source), SocketAddr::V4(destination), buffer)),
+                v1::ProxyAddresses::Ipv6 {
+                    source,
+                    destination,
+                } => Ok((SocketAddr::V6(source), SocketAddr::V6(destination), buffer)),
+            },
+            ProxyHeader::Version2 { addresses, .. } => match addresses {
+                v2::ProxyAddresses::Ipv4 {
+                    source,
+                    destination,
+                } => Ok((SocketAddr::V4(source), SocketAddr::V4(destination), buffer)),
+                v2::ProxyAddresses::Ipv6 {
+                    source,
+                    destination,
+                } => Ok((SocketAddr::V6(source), SocketAddr::V6(destination), buffer)),
+                _ => todo!(),
+            },
+            _ => unreachable!(),
+        },
+        Err(err) => Err(io::Error::new(io::ErrorKind::Other, err)),
+    }
 }

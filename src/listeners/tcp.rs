@@ -1,9 +1,8 @@
+use std::{io, net::SocketAddr};
+
 use crate::args::Args;
 use crate::util::check_origin_allowed;
 
-use std::{io, net::SocketAddr};
-
-use cidr::IpCidr;
 use tokio::net::{TcpSocket, TcpStream};
 
 pub async fn listen(args: Args) -> io::Result<()> {
@@ -45,7 +44,8 @@ async fn tcp_handle_connection(conn: TcpStream, args: Args) -> io::Result<()> {
     let mut buffer = [0u8; u16::MAX as usize];
     let read_bytes = conn.try_read(&mut buffer)?;
 
-    println!("{}", String::from_utf8_lossy(&buffer[..read_bytes]));
+    let (src, dst, rest) = crate::util::parse_proxy_protocol_header(&buffer[..read_bytes])?;
+    dbg!(src, dst, rest);
 
     Ok(())
 }
