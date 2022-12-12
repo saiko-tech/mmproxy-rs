@@ -33,19 +33,32 @@ pub async fn listen(args: Args) -> io::Result<()> {
 
         let args_clone = args.clone();
         tokio::spawn(async move {
-            if let Err(err) = tcp_handle_connection(conn, args_clone).await {
+            if let Err(err) = tcp_handle_connection(conn, addr, args_clone).await {
                 log::error!("{err}");
             }
         });
     }
 }
 
-async fn tcp_handle_connection(conn: TcpStream, args: Args) -> io::Result<()> {
+async fn tcp_handle_connection(conn: TcpStream, addr: SocketAddr, args: Args) -> io::Result<()> {
     let mut buffer = [0u8; u16::MAX as usize];
     let read_bytes = conn.try_read(&mut buffer)?;
 
-    let (src, dst, rest) = crate::util::parse_proxy_protocol_header(&buffer[..read_bytes])?;
-    dbg!(src, dst, rest);
+    let (addr_pair, _rest) = crate::util::parse_proxy_protocol_header(&buffer[..read_bytes])?;
+    let src_addr = match addr_pair {
+        Some((src, _dst)) => src,
+        None => {
+            log::debug!("unknown source, using the regular connection address");
+            addr
+        }
+    };
+    let target_addr = match src_addr {
+        SocketAddr::V4(_) => args.ipv4_fwd,
+        SocketAddr::V6(_) => args.ipv6_fwd,
+    };
+
+    log::info!("source addr: {src_addr}");
+    log::info!("target addr: {target_addr}");
 
     Ok(())
 }
