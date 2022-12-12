@@ -1,5 +1,6 @@
 mod args;
 mod tcp;
+mod udp;
 mod util;
 
 use env_logger::{Env, DEFAULT_FILTER_ENV};
@@ -18,7 +19,7 @@ async fn main() {
 
     let ret = match args.protocol {
         util::Protocol::Tcp => tcp::listen(args).await,
-        util::Protocol::Udp => unimplemented!(),
+        util::Protocol::Udp => udp::listen(args).await,
     };
 
     if let Err(why) = ret {
