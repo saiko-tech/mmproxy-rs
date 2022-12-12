@@ -187,6 +187,7 @@ dependencies = [
  "env_logger",
  "log",
  "proxy-protocol",
+ "socket2",
  "tokio",
 ]
 
@@ -323,7 +324,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eab6d665857cc6ca78d6e80303a02cea7a7851e85dfbd77cbdc09bd129f1ef46"
 dependencies = [
  "autocfg",
+ "bytes",
  "libc",
+ "memchr",
  "mio",
  "num_cpus",
  "pin-project-lite",
