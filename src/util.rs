@@ -91,3 +91,27 @@ pub fn parse_proxy_protocol_header(
         Err(err) => Err(io::Error::new(io::ErrorKind::Other, err)),
     }
 }
+
+pub async fn create_upstream_conn(
+    src: SocketAddr,
+    target: SocketAddr,
+    mark: u32,
+) -> io::Result<tokio::net::TcpStream> {
+    use socket2::SockRef;
+    use tokio::net::TcpSocket;
+
+    let socket = match src {
+        SocketAddr::V4(_) => TcpSocket::new_v4()?,
+        SocketAddr::V6(_) => TcpSocket::new_v6()?,
+    };
+    let socket_ref = SockRef::from(&socket);
+
+    socket_ref.set_nodelay(true)?;
+    socket_ref.set_reuse_address(true)?;
+    socket_ref.set_mark(mark)?;
+    socket_ref.set_ip_transparent(true)?;
+
+    socket.bind(src)?;
+
+    Ok(socket.connect(target).await?)
+}
