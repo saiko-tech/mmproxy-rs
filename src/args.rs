@@ -1,4 +1,4 @@
-use crate::{util, Protocol};
+use crate::util::{self, Protocol};
 use cidr::IpCidr;
 use std::net::SocketAddr;
 

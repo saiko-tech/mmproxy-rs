@@ -1,13 +1,8 @@
-// TODO: delete this once the structure of the project is set in stone
-#![allow(dead_code, unused_imports, unused_variables)]
-
 mod args;
 mod listeners;
 mod util;
 
 use env_logger::{Env, DEFAULT_FILTER_ENV};
-use std::io;
-use util::Protocol;
 
 #[tokio::main]
 async fn main() {
@@ -21,12 +16,12 @@ async fn main() {
         }
     };
 
-    let result = match args.protocol {
-        Protocol::Tcp => listeners::tcp_listen(args).await,
-        Protocol::Udp => unimplemented!(),
+    let ret = match args.protocol {
+        util::Protocol::Tcp => listeners::tcp_listen(args).await,
+        util::Protocol::Udp => unimplemented!(),
     };
 
-    if let Err(why) = result {
+    if let Err(why) = ret {
         log::error!("{why}");
         return;
     }
