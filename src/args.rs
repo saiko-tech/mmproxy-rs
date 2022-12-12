@@ -3,7 +3,7 @@ use cidr::IpCidr;
 use std::net::SocketAddr;
 
 argwerk::define! {
-    #[usage = "mmproxy [-h] [options] -m <mark>"]
+    #[usage = "mmproxy [-h] [options]"]
     #[derive(Clone)]
     pub struct Args {
         pub help: bool = false,
@@ -11,8 +11,7 @@ argwerk::define! {
         pub ipv6_fwd: SocketAddr = "[::1]:443".parse().unwrap(),
         pub allowed_subnets: Option<Vec<IpCidr>> = None,
         pub close_after: u32 = 60,
-        #[required = "mark is required"]
-        pub mark: i32,
+        pub mark: u32 = 0,
         pub listen_addr: SocketAddr = "0.0.0.0:8443".parse().unwrap(),
         pub listeners: u32 = 1,
         pub protocol: Protocol = Protocol::Tcp
@@ -59,9 +58,9 @@ argwerk::define! {
             };
         }
     }
-    /// The mark that will be set on outbound packets.
+    /// The mark that will be set on outbound packets. (default: 0)
     ["-m" | "--mark", n] => {
-        mark = Some(str::parse::<i32>(&n)?);
+        mark = str::parse::<u32>(&n)?;
     }
 }
 
