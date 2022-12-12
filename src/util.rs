@@ -107,6 +107,7 @@ pub async fn create_upstream_conn(
     let socket_ref = SockRef::from(&socket);
 
     socket_ref.set_nodelay(true)?;
+    socket_ref.set_nonblocking(true)?;
     socket_ref.set_reuse_address(true)?;
     socket_ref.set_mark(mark)?;
     socket_ref.set_ip_transparent(true)?;
