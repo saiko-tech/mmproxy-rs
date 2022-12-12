@@ -1,7 +1,7 @@
 use std::{io, net::SocketAddr};
 
 use crate::args::Args;
-use crate::util::check_origin_allowed;
+use crate::util::{check_origin_allowed, create_upstream_conn, parse_proxy_protocol_header};
 
 use tokio::net::{TcpSocket, TcpStream};
 
@@ -40,11 +40,16 @@ pub async fn listen(args: Args) -> io::Result<()> {
     }
 }
 
-async fn tcp_handle_connection(conn: TcpStream, addr: SocketAddr, args: Args) -> io::Result<()> {
+async fn tcp_handle_connection(
+    mut conn: TcpStream,
+    addr: SocketAddr,
+    args: Args,
+) -> io::Result<()> {
     let mut buffer = [0u8; u16::MAX as usize];
     let read_bytes = conn.try_read(&mut buffer)?;
+    // let read_bytes = tokio::io::copy_buf(mut &mut buffer, &mut conn).await?;
 
-    let (addr_pair, _rest) = crate::util::parse_proxy_protocol_header(&buffer[..read_bytes])?;
+    let (addr_pair, mut rest) = parse_proxy_protocol_header(&buffer[..read_bytes as usize])?;
     let src_addr = match addr_pair {
         Some((src, _dst)) => src,
         None => {
@@ -56,9 +61,15 @@ async fn tcp_handle_connection(conn: TcpStream, addr: SocketAddr, args: Args) ->
         SocketAddr::V4(_) => args.ipv4_fwd,
         SocketAddr::V6(_) => args.ipv6_fwd,
     };
-
     log::info!("source addr: {src_addr}");
     log::info!("target addr: {target_addr}");
 
+    let mut upstream_conn = create_upstream_conn(src_addr, target_addr, args.mark as u32).await?;
+    log::info!("created the upstream connection");
+
+    conn.set_nodelay(true)?;
+
+    tokio::io::copy_buf(&mut rest, &mut upstream_conn).await?;
+    tokio::io::copy_bidirectional(&mut conn, &mut upstream_conn).await?;
     Ok(())
 }
