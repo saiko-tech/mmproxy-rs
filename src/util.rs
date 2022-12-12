@@ -48,29 +48,42 @@ pub fn check_origin_allowed(addr: &IpAddr, subnets: &[IpCidr]) -> bool {
 
 pub fn parse_proxy_protocol_header(
     mut buffer: &[u8],
-) -> io::Result<(SocketAddr, SocketAddr, &[u8])> {
+) -> io::Result<(Option<(SocketAddr, SocketAddr)>, &[u8])> {
     match proxy_protocol::parse(&mut buffer) {
         Ok(result) => match result {
             ProxyHeader::Version1 { addresses } => match addresses {
-                v1::ProxyAddresses::Unknown => todo!(),
+                v1::ProxyAddresses::Unknown => Ok((None, buffer)),
                 v1::ProxyAddresses::Ipv4 {
                     source,
                     destination,
-                } => Ok((SocketAddr::V4(source), SocketAddr::V4(destination), buffer)),
+                } => Ok((
+                    Some((SocketAddr::V4(source), SocketAddr::V4(destination))),
+                    buffer,
+                )),
                 v1::ProxyAddresses::Ipv6 {
                     source,
                     destination,
-                } => Ok((SocketAddr::V6(source), SocketAddr::V6(destination), buffer)),
+                } => Ok((
+                    Some((SocketAddr::V6(source), SocketAddr::V6(destination))),
+                    buffer,
+                )),
             },
             ProxyHeader::Version2 { addresses, .. } => match addresses {
+                v2::ProxyAddresses::Unspec => Ok((None, buffer)),
                 v2::ProxyAddresses::Ipv4 {
                     source,
                     destination,
-                } => Ok((SocketAddr::V4(source), SocketAddr::V4(destination), buffer)),
+                } => Ok((
+                    Some((SocketAddr::V4(source), SocketAddr::V4(destination))),
+                    buffer,
+                )),
                 v2::ProxyAddresses::Ipv6 {
                     source,
                     destination,
-                } => Ok((SocketAddr::V6(source), SocketAddr::V6(destination), buffer)),
+                } => Ok((
+                    Some((SocketAddr::V6(source), SocketAddr::V6(destination))),
+                    buffer,
+                )),
                 _ => todo!(),
             },
             _ => unreachable!(),
