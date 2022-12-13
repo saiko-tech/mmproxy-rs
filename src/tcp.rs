@@ -1,7 +1,7 @@
 use std::{io, net::SocketAddr};
 
 use crate::args::Args;
-use crate::util::{check_origin_allowed, create_upstream_conn, parse_proxy_protocol_header};
+use crate::util::{check_origin_allowed, parse_proxy_protocol_header, tcp_create_upstream_conn};
 
 use tokio::net::{TcpSocket, TcpStream};
 
@@ -64,7 +64,7 @@ async fn tcp_handle_connection(
     log::info!("source addr: {src_addr}");
     log::info!("target addr: {target_addr}");
 
-    let mut upstream_conn = create_upstream_conn(src_addr, target_addr, args.mark).await?;
+    let mut upstream_conn = tcp_create_upstream_conn(src_addr, target_addr, args.mark).await?;
     log::info!("created the upstream connection");
 
     conn.set_nodelay(true)?;
