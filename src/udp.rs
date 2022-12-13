@@ -38,7 +38,7 @@ pub async fn listen(args: Args) -> io::Result<()> {
             continue;
         }
         if src_addr == addr {
-            log::debug!("unknown source, using the regular connection address");
+            log::debug!("unknown source, using the downstream connection address");
         }
 
         let target_addr = match src_addr {

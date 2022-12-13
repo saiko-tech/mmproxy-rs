@@ -53,7 +53,7 @@ async fn tcp_handle_connection(
     let src_addr = match addr_pair {
         Some((src, _dst)) => src,
         None => {
-            log::debug!("unknown source, using the regular connection address");
+            log::debug!("unknown source, using the downstream connection address");
             addr
         }
     };
