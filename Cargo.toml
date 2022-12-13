@@ -13,4 +13,4 @@ socket2 = "0.4.7"
 
 [dependencies.tokio]
 version = "1.23.0"
-features = ["net", "rt-multi-thread", "macros", "io-util", "sync"]
+features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"]
