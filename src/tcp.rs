@@ -49,7 +49,7 @@ async fn tcp_handle_connection(
     conn.readable().await?;
     let read_bytes = conn.try_read(&mut buffer)?;
 
-    let (addr_pair, mut rest) = parse_proxy_protocol_header(&buffer[..read_bytes as usize])?;
+    let (addr_pair, mut rest) = parse_proxy_protocol_header(&buffer[..read_bytes])?;
     let src_addr = match addr_pair {
         Some((src, _dst)) => src,
         None => {
