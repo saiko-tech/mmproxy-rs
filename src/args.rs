@@ -1,6 +1,7 @@
 use crate::util::{self, Protocol};
 use cidr::IpCidr;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 argwerk::define! {
     #[usage = "mmproxy [-h] [options]"]
@@ -10,7 +11,7 @@ argwerk::define! {
         pub ipv4_fwd: SocketAddr = "127.0.0.1:443".parse().unwrap(),
         pub ipv6_fwd: SocketAddr = "[::1]:443".parse().unwrap(),
         pub allowed_subnets: Option<Vec<IpCidr>> = None,
-        pub close_after: u32 = 60,
+        pub close_after: Duration = Duration::from_secs(60),
         pub mark: u32 = 0,
         pub listen_addr: SocketAddr = "0.0.0.0:8443".parse().unwrap(),
         pub listeners: u32 = 1,
@@ -36,7 +37,7 @@ argwerk::define! {
     }
     /// Number of seconds after which UDP socket will be cleaned up. (default: 60)
     ["-c" | "--close-after", n] => {
-        close_after = str::parse(&n)?;
+        close_after = Duration::from_secs(str::parse(&n)?);
     }
     /// Address the proxy listens on. (default: "0.0.0.0:8443")
     ["-l" | "--listen-addr", #[option] string] => {
