@@ -5,6 +5,8 @@ use std::str::FromStr;
 
 use cidr::IpCidr;
 use proxy_protocol::{version1 as v1, version2 as v2, ProxyHeader};
+use socket2::SockRef;
+use tokio::net::{TcpSocket, UdpSocket};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
@@ -99,27 +101,50 @@ pub fn parse_proxy_protocol_header(
     }
 }
 
-pub async fn create_upstream_conn(
+fn setup_socket(socket_ref: &SockRef, mark: u32) -> io::Result<()> {
+    socket_ref.set_nonblocking(true)?;
+    socket_ref.set_reuse_address(true)?;
+    socket_ref.set_mark(mark)?;
+    socket_ref.set_ip_transparent(true)?;
+
+    Ok(())
+}
+
+pub async fn tcp_create_upstream_conn(
     src: SocketAddr,
     target: SocketAddr,
     mark: u32,
 ) -> io::Result<tokio::net::TcpStream> {
-    use socket2::SockRef;
-    use tokio::net::TcpSocket;
-
     let socket = match src {
         SocketAddr::V4(_) => TcpSocket::new_v4()?,
         SocketAddr::V6(_) => TcpSocket::new_v6()?,
     };
     let socket_ref = SockRef::from(&socket);
 
+    setup_socket(&socket_ref, mark)?;
     socket_ref.set_nodelay(true)?;
-    socket_ref.set_nonblocking(true)?;
-    socket_ref.set_reuse_address(true)?;
-    socket_ref.set_mark(mark)?;
-    socket_ref.set_ip_transparent(true)?;
-
     socket.bind(src)?;
 
     Ok(socket.connect(target).await?)
+}
+
+pub async fn udp_create_upstream_conn(
+    src: SocketAddr,
+    target: SocketAddr,
+    mark: u32,
+) -> io::Result<UdpSocket> {
+    use socket2::{Domain, Protocol, Socket, Type};
+
+    let socket = match src {
+        SocketAddr::V4(_) => Socket::new(Domain::IPV4, Type::DGRAM, None)?,
+        SocketAddr::V6(_) => Socket::new(Domain::IPV6, Type::DGRAM, None)?,
+    };
+    let socket_ref = SockRef::from(&socket);
+    setup_socket(&socket_ref, mark)?;
+    socket.bind(&src.into())?;
+
+    let udp_socket = UdpSocket::from_std(socket.into())?;
+    udp_socket.connect(target).await?;
+
+    Ok(udp_socket)
 }
