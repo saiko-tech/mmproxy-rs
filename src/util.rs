@@ -88,7 +88,10 @@ pub fn parse_proxy_protocol_header(
                     buffer,
                     2,
                 )),
-                _ => todo!(),
+                v2::ProxyAddresses::Unix { .. } => Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "unix sockets are not supported",
+                )),
             },
             _ => unreachable!(),
         },
