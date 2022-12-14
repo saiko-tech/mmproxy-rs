@@ -24,6 +24,5 @@ async fn main() {
 
     if let Err(why) = ret {
         log::error!("{why}");
-        return;
     }
 }
