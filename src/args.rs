@@ -32,7 +32,7 @@ argwerk::define! {
     /// Path to a file that contains allowed subnets of the proxy servers.
     ["-a" | "--allowed-subnets", path] => {
         let ret = util::parse_allowed_subnets(&path)?;
-        allowed_subnets = if ret.len() > 0 { Some (ret) } else { None }
+        allowed_subnets = if !ret.is_empty() { Some (ret) } else { None }
     }
     /// Number of seconds after which UDP socket will be cleaned up. (default: 60)
     ["-c" | "--close-after", n] => {

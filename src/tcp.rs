@@ -1,8 +1,6 @@
-use std::{io, net::SocketAddr};
-
 use crate::args::Args;
 use crate::util::{check_origin_allowed, parse_proxy_protocol_header, tcp_create_upstream_conn};
-
+use std::{io, net::SocketAddr};
 use tokio::net::{TcpSocket, TcpStream};
 
 pub async fn listen(args: Args) -> io::Result<()> {
@@ -29,10 +27,13 @@ pub async fn listen(args: Args) -> io::Result<()> {
             }
         }
 
-        let args_clone = args.clone();
+        let mark = args.mark;
+        let ipv4_fwd = args.ipv4_fwd;
+        let ipv6_fwd = args.ipv6_fwd;
+
         tokio::spawn(async move {
-            if let Err(err) = tcp_handle_connection(conn, addr, args_clone).await {
-                log::error!("{err}");
+            if let Err(err) = tcp_handle_connection(conn, addr, mark, ipv4_fwd, ipv6_fwd).await {
+                log::error!("while handling a connection: {err}");
             }
         });
     }
@@ -41,7 +42,9 @@ pub async fn listen(args: Args) -> io::Result<()> {
 async fn tcp_handle_connection(
     mut conn: TcpStream,
     addr: SocketAddr,
-    args: Args,
+    mark: u32,
+    ipv4_fwd: SocketAddr,
+    ipv6_fwd: SocketAddr,
 ) -> io::Result<()> {
     let mut buffer = [0u8; u16::MAX as usize];
     conn.readable().await?;
@@ -56,12 +59,12 @@ async fn tcp_handle_connection(
         }
     };
     let target_addr = match src_addr {
-        SocketAddr::V4(_) => args.ipv4_fwd,
-        SocketAddr::V6(_) => args.ipv6_fwd,
+        SocketAddr::V4(_) => ipv4_fwd,
+        SocketAddr::V6(_) => ipv6_fwd,
     };
     log::info!("[new conn] [origin: {addr} [src: {src_addr}]");
 
-    let mut upstream_conn = tcp_create_upstream_conn(src_addr, target_addr, args.mark).await?;
+    let mut upstream_conn = tcp_create_upstream_conn(src_addr, target_addr, mark).await?;
     conn.set_nodelay(true)?;
 
     tokio::io::copy_buf(&mut rest, &mut upstream_conn).await?;
