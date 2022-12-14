@@ -1,4 +1,5 @@
 use crate::{args::Args, util};
+use socket2::SockRef;
 use std::{
     collections::HashMap,
     io,
@@ -30,7 +31,12 @@ impl UdpProxyConn {
 }
 
 pub async fn listen(args: Args) -> io::Result<()> {
-    let socket = Arc::new(UdpSocket::bind(args.listen_addr).await?);
+    let socket = {
+        let socket = UdpSocket::bind(args.listen_addr).await?;
+        let sock_ref = SockRef::from(&socket);
+        sock_ref.set_reuse_port(args.listeners > 1)?;
+        Arc::new(socket)
+    };
     log::info!("listening on: {}", socket.local_addr()?);
 
     let mut buffer = [0u8; MAX_DGRAM_SIZE];
