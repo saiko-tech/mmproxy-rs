@@ -1,7 +1,7 @@
-use std::net::{IpAddr, SocketAddr};
 use std::{
     fs::File,
     io::{self, Read},
+    net::{IpAddr, SocketAddr},
     str::FromStr,
 };
 

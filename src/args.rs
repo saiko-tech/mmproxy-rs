@@ -1,6 +1,5 @@
 use crate::util::{self, Protocol};
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 argwerk::define! {
     #[usage = "mmproxy [-h] [options]"]

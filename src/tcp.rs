@@ -1,5 +1,4 @@
-use crate::args::Args;
-use crate::util::{check_origin_allowed, parse_proxy_protocol_header, tcp_create_upstream_conn};
+use crate::{args::Args, util};
 use std::{io, net::SocketAddr};
 use tokio::net::{TcpSocket, TcpStream};
 
@@ -21,7 +20,7 @@ pub async fn listen(args: Args) -> io::Result<()> {
         if let Some(ref allowed_subnets) = args.allowed_subnets {
             let ip_addr = addr.ip();
 
-            if !check_origin_allowed(&ip_addr, allowed_subnets) {
+            if !util::check_origin_allowed(&ip_addr, allowed_subnets) {
                 log::debug!("connection origin is not allowed: {ip_addr}");
                 continue;
             }
@@ -50,7 +49,7 @@ async fn tcp_handle_connection(
     conn.readable().await?;
     let read_bytes = conn.try_read(&mut buffer)?;
 
-    let (addr_pair, mut rest, _version) = parse_proxy_protocol_header(&buffer[..read_bytes])?;
+    let (addr_pair, mut rest, _version) = util::parse_proxy_protocol_header(&buffer[..read_bytes])?;
     let src_addr = match addr_pair {
         Some((src, _dst)) => src,
         None => {
@@ -64,7 +63,7 @@ async fn tcp_handle_connection(
     };
     log::info!("[new conn] [origin: {addr} [src: {src_addr}]");
 
-    let mut upstream_conn = tcp_create_upstream_conn(src_addr, target_addr, mark).await?;
+    let mut upstream_conn = util::tcp_create_upstream_conn(src_addr, target_addr, mark).await?;
     conn.set_nodelay(true)?;
 
     tokio::io::copy_buf(&mut rest, &mut upstream_conn).await?;
