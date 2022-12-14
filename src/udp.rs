@@ -49,8 +49,8 @@ pub async fn listen(args: Args) -> io::Result<()> {
             addr = conn_rx.recv() => {
                 if let Some(addr) = addr {
                     if let Some((_conn, handle)) = connections.remove(&addr) {
+                        log::info!("closing {addr} due inactivity");
                         if !handle.is_finished() {
-                            log::info!("closing {addr} due inactivity");
                             handle.abort();
                         }
                     }
@@ -80,12 +80,6 @@ pub async fn listen(args: Args) -> io::Result<()> {
                 .await
                 {
                     log::error!("while handling connection: {why}");
-                    if let Some((_conn, handle)) = connections.remove(&addr) {
-                        if !handle.is_finished() {
-                            log::warn!("aborting {addr}");
-                            handle.abort();
-                        }
-                    }
                 }
             }
         }
@@ -126,24 +120,32 @@ async fn udp_handle_connection(
             }
             log::info!("[new conn] [origin: {addr}] [src: {src_addr}]");
 
-            let proxy_conn = Arc::new(UdpProxyConn::new(
-                util::udp_create_upstream_conn(src_addr, target_addr, args.mark).await?,
-            ));
+            let proxy_conn =
+                match util::udp_create_upstream_conn(src_addr, target_addr, args.mark).await {
+                    Ok(sock) => Arc::new(UdpProxyConn::new(sock)),
+                    Err(err) => {
+                        log::error!("failed to create an upstream connection to {target_addr}");
+                        return Err(err);
+                    }
+                };
+
             let sock_clone = socket.clone();
             let proxy_clone1 = proxy_conn.clone();
-            let (conn_tx1, proxy_clone2) = (conn_tx.clone(), proxy_conn.clone());
 
             let close_after = args.close_after;
             let handle = tokio::spawn(async move {
                 if let Err(why) =
-                    udp_copy_upstream_to_downstream(addr, sock_clone, proxy_clone1).await
+                    udp_copy_upstream_to_downstream(addr, src_addr, sock_clone, proxy_clone1).await
                 {
                     log::error!("while copying from upstream to downstream [{src_addr}]: {why}");
                 };
             });
-            tokio::spawn(async move {
-                udp_close_after_inactivity(addr, close_after, conn_tx1, proxy_clone2).await;
-            });
+            tokio::spawn(udp_close_after_inactivity(
+                addr,
+                close_after,
+                conn_tx.clone(),
+                proxy_conn.clone(),
+            ));
 
             connections.insert(addr, (proxy_conn.clone(), handle));
             proxy_conn
@@ -154,21 +156,38 @@ async fn udp_handle_connection(
         }
     };
 
-    proxy_conn.upstream_conn.send(rest).await?;
-    Ok(())
+    match proxy_conn.upstream_conn.send(rest).await {
+        Ok(size) => {
+            log::debug!("from [{}] to [{}], size: {}", src_addr, addr, size);
+            Ok(())
+        }
+        Err(err) => {
+            log::error!("failed to write data to upstream connection");
+            Err(err)
+        }
+    }
 }
 
 async fn udp_copy_upstream_to_downstream(
     addr: SocketAddr,
+    src_addr: SocketAddr,
     downstream: Arc<UdpSocket>,
-    upstream: Arc<UdpProxyConn>,
+    proxy_conn: Arc<UdpProxyConn>,
 ) -> io::Result<()> {
-    let mut buffer = [0u8; u16::MAX as usize];
+    let mut buffer = [0u8; MAX_DGRAM_SIZE];
 
     loop {
-        let read_bytes = upstream.upstream_conn.recv(&mut buffer).await?;
-        downstream.send_to(&buffer[..read_bytes], addr).await?;
-        upstream.last_activity.fetch_add(1, Ordering::SeqCst);
+        let read_bytes = proxy_conn.upstream_conn.recv(&mut buffer).await?;
+        let sent_bytes = downstream.send_to(&buffer[..read_bytes], addr).await?;
+        if sent_bytes == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "couldn't sent anything to downstream",
+            ));
+        }
+        log::debug!("from [{}] to [{}], size: {}", addr, src_addr, sent_bytes);
+
+        proxy_conn.last_activity.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -176,18 +195,18 @@ async fn udp_close_after_inactivity(
     addr: SocketAddr,
     close_after: Duration,
     conn_tx: mpsc::Sender<SocketAddr>,
-    upstream: Arc<UdpProxyConn>,
+    proxy_conn: Arc<UdpProxyConn>,
 ) {
-    let mut last_activity = upstream.last_activity.load(Ordering::SeqCst);
+    let mut last_activity = proxy_conn.last_activity.load(Ordering::SeqCst);
     loop {
         tokio::time::sleep(close_after).await;
-        if upstream.last_activity.load(Ordering::SeqCst) == last_activity {
+        if proxy_conn.last_activity.load(Ordering::SeqCst) == last_activity {
             break;
         }
-        last_activity = upstream.last_activity.load(Ordering::SeqCst);
+        last_activity = proxy_conn.last_activity.load(Ordering::SeqCst);
     }
 
     if let Err(why) = conn_tx.send(addr).await {
-        log::error!("{why}");
+        log::error!("couldn't send the close command to conn channel: {why}");
     }
 }
