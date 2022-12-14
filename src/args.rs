@@ -1,5 +1,4 @@
 use crate::util::{self, Protocol};
-use cidr::IpCidr;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -10,14 +9,14 @@ argwerk::define! {
         pub help: bool = false,
         pub ipv4_fwd: SocketAddr = "127.0.0.1:443".parse().unwrap(),
         pub ipv6_fwd: SocketAddr = "[::1]:443".parse().unwrap(),
-        pub allowed_subnets: Option<Vec<IpCidr>> = None,
+        pub allowed_subnets: Option<Vec<cidr::IpCidr>> = None,
         pub close_after: Duration = Duration::from_secs(60),
         pub mark: u32 = 0,
         pub listen_addr: SocketAddr = "0.0.0.0:8443".parse().unwrap(),
         pub listeners: u32 = 1,
         pub protocol: Protocol = Protocol::Tcp
     }
-    /// Prints the help.
+    /// Prints the help string.
     ["-h" | "--help"] => {
         println!("{}", Args::help());
         help = true;
@@ -40,24 +39,20 @@ argwerk::define! {
         close_after = Duration::from_secs(str::parse(&n)?);
     }
     /// Address the proxy listens on. (default: "0.0.0.0:8443")
-    ["-l" | "--listen-addr", #[option] string] => {
-        if let Some(string) = string {
-            listen_addr = string.parse()?;
-        }
+    ["-l" | "--listen-addr", string] => {
+        listen_addr = string.parse()?;
     }
     /// Number of listener sockets that will be opened for the listen address. (Linux 3.9+) (default: 1)
     ["--listeners", n] => {
         listeners = str::parse(&n)?;
     }
     /// Protocol that will be proxied: tcp, udp. (default: tcp)
-    ["-p" | "--protocol", #[option] p] => {
-        if let Some(p) = p {
-            protocol = match &p.to_lowercase()[..] {
-                "tcp" => Protocol::Tcp,
-                "udp" => Protocol::Udp,
-                _ => return Err(format!("invalid protocol value: {p}").into()),
-            };
-        }
+    ["-p" | "--protocol", p] => {
+        protocol = match &p.to_lowercase()[..] {
+            "tcp" => Protocol::Tcp,
+            "udp" => Protocol::Udp,
+            _ => return Err(format!("invalid protocol value: {p}").into()),
+        };
     }
     /// The mark that will be set on outbound packets. (default: 0)
     ["-m" | "--mark", n] => {
