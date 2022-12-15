@@ -5,7 +5,7 @@ Rust implementation of MMProxy
 ## Features
 
 - [x] TCP - Accepts proxy protocol enabled requests from [Nginx](https://docs.nginx.com/nginx/admin-guide/load-balancer/using-proxy-protocol/#proxy-protocol-for-a-tcp-connection-to-an-upstream), [HAProxy](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt)
-- [x] UDP - Accepts proxy protocol enabled requests from [udppp](https://github.com/b23r0/udppp
+- [x] UDP - Accepts proxy protocol enabled requests from [udppp](https://github.com/b23r0/udppp)
 
 ## Usage
 
