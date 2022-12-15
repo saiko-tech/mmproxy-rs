@@ -1,11 +1,17 @@
 # mmproxy-rs
 
-Rust implementation of MMProxy
+A Rust implementation of MMProxy! 🚀
+
+## Rationale
+
+Many previous implementations only support [PROXY Protocol](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) for either TCP or UDP, whereas this version supports both TCP and UDP.<br>
+Another reason to choose mmproxy-rs may be if you want to avoid interference from Garbage Collection pauses, which is what originally triggered the re-write from the amazing [go-mmproxy](https://github.com/path-network/go-mmproxy).
 
 ## Features
 
-- [x] TCP - Accepts [PROXY Protocol](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) enabled requests from [Nginx](https://docs.nginx.com/nginx/admin-guide/load-balancer/using-proxy-protocol/#proxy-protocol-for-a-tcp-connection-to-an-upstream), [HAProxy](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt)
+- [x] TCP - Accepts PROXY Protocol enabled requests from [Nginx](https://docs.nginx.com/nginx/admin-guide/load-balancer/using-proxy-protocol/#proxy-protocol-for-a-tcp-connection-to-an-upstream), [HAProxy](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt)
 - [x] UDP - Accepts PROXY Protocol enabled requests from [udppp](https://github.com/b23r0/udppp)
+- [x] No Garbage Collection pauses
 
 ## Usage
 
