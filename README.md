@@ -56,6 +56,15 @@ sudo mmproxy  -l $address:$bind_port -4 127.0.0.1:$upstream_port -p udp
 
 See https://gist.github.com/brkp/f3026a37a2ce869493483d5dbfb2ce02
 
+An initial benchmark gave the following results:
+
+```
+# go-mmproxy: [send: 20512950][recv: 352875]
+# mmproxy-rs: [send: 19705328][recv: 593526]
+```
+
+This seems to suggest this rust implementation has about 70% more throughput than `go-mmproxy` for `upstream->downstream` and has comparable performance for `downstream->upstream`.
+
 ## Acknowledgements and References
 
 - https://blog.cloudflare.com/mmproxy-creative-way-of-preserving-client-ips-in-spectrum/
