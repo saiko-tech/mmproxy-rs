@@ -60,7 +60,7 @@ $ sudo mmproxy  -l $address:$bind_port -4 127.0.0.1:$upstream_port -p udp
 
 ## Benchmarking
 
-Tests were ran on a HP Victus laptop with AMD Ryzen 5 5600H @ 3.3GHz (12 logical cores).
+Tests were run on a HP Victus laptop with AMD Ryzen 5 5600H @ 3.3GHz (12 logical cores).
 
 ### UDP Mode
 
@@ -74,11 +74,11 @@ $ iperf -sup 1122                                                        // iper
 $ iperf -c 127.0.0.1 -p 25578 -Rub 10G                                   // iperf client
 ```
 Results:
-|            | transfer    | bandwidth      | jitter   | lost/total dgrams     |
-|------------|-------------|----------------|----------|-----------------------|
-| no-proxy   | 6.31 GBytes | 5.42 Gbits/sec | 0.000 ms | 1334/4609326 (0.029%) |
-| go-mmproxy | 3.13 GBytes | 2.69 Gbits/sec | 0.001 ms | 1967912/4252307 (46%) |
-| mmproxy-rs | 3.70 GBytes | 3.18 Gbits/sec | 0.002 ms | 2130278/4830982 (44%) |
+|            | transfer    | bandwidth      |
+|------------|-------------|----------------|
+| no-proxy   | 6.31 GBytes | 5.42 Gbits/sec |
+| go-mmproxy | 3.13 GBytes | 2.69 Gbits/sec |
+| mmproxy-rs | 3.70 GBytes | 3.18 Gbits/sec |
 
 The iperf test was run in reverse mode, with the server sending data to the client. The results suggest that mmproxy-rs has higher throughput from upstream to downstream compared to go-mmproxy.
 
