@@ -7,7 +7,7 @@ use env_logger::{Env, DEFAULT_FILTER_ENV};
 
 #[tokio::main]
 async fn main() {
-    env_logger::init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
+    env_logger::init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 
     let args = match args::parse_args() {
         Ok(args) => args,
