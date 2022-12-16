@@ -47,29 +47,40 @@ Options:
 
 ### Example
 
-:warning: needs root permissions
+:warning: needs root permissions.
 
 ```terminal
-address=X.X.X.X # get this via "ip addr" command - don't use 0.0.0.0!
-bind_port=8080
-upstream_port=8081
-sudo ip rule add from 127.0.0.1/8 iif lo table 123
-sudo ip route add local 0.0.0.0/0 dev lo table 123
-sudo mmproxy  -l $address:$bind_port -4 127.0.0.1:$upstream_port -p udp
+$ address=X.X.X.X # get this via "ip addr" command - don't use 0.0.0.0!
+$ bind_port=8080
+$ upstream_port=8081
+$ sudo ip rule add from 127.0.0.1/8 iif lo table 123
+$ sudo ip route add local 0.0.0.0/0 dev lo table 123
+$ sudo mmproxy  -l $address:$bind_port -4 127.0.0.1:$upstream_port -p udp
 ```
 
 ## Benchmarking
 
-See https://gist.github.com/brkp/f3026a37a2ce869493483d5dbfb2ce02
+Tests were ran on a HP Victus laptop with AMD Ryzen 5 5600H @ 3.3GHz (12 logical cores).
 
-An initial benchmark gave the following results:
+### UDP Mode
+
+Setup: `iperf client -> udppp -> mmproxy-rs/go-mmproxy -> iperf server`
 
 ```
-# go-mmproxy: [send: 20512950][recv: 352875]
-# mmproxy-rs: [send: 19705328][recv: 593526]
+# udpp  -m 1 -l 25578 -r 25577 -h "127.0.0.1" -b "127.0.0.1" -p          // udppp
+# mmproxy -l "127.0.0.1:25577" -4 "127.0.0.1:1122" -p udp -c         1   // mmproxy-rs
+# mmproxy -l "127.0.0.1:25577" -4 "127.0.0.1:1122" -p udp -close-after 1 // go-mmproxy
+$ iperf -sup 1122                                                        // iperf server
+$ iperf -c 127.0.0.1 -p 25578 -Rub 10G                                   // iperf client
 ```
+Results:
+|            | transfer    | bandwidth      | jitter   | lost/total dgrams     |
+|------------|-------------|----------------|----------|-----------------------|
+| no-proxy   | 6.31 GBytes | 5.42 Gbits/sec | 0.000 ms | 1334/4609326 (0.029%) |
+| go-mmproxy | 3.13 GBytes | 2.69 Gbits/sec | 0.001 ms | 1967912/4252307 (46%) |
+| mmproxy-rs | 3.70 GBytes | 3.18 Gbits/sec | 0.002 ms | 2130278/4830982 (44%) |
 
-This seems to suggest this rust implementation has about 70% more throughput than `go-mmproxy` for `upstream->downstream` and has comparable performance for `downstream->upstream`.
+The iperf test was run in reverse mode, with the server sending data to the client. The results suggest that mmproxy-rs has higher throughput from upstream to downstream compared to go-mmproxy.
 
 ## Acknowledgements and References
 
