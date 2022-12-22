@@ -1,9 +1,9 @@
 mod args;
-mod tcp;
-mod udp;
+mod listener;
 mod util;
 
 use env_logger::{Env, DEFAULT_FILTER_ENV};
+use listener::{tcp, udp};
 
 #[tokio::main]
 async fn main() {
