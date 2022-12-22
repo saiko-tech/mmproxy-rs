@@ -185,6 +185,7 @@ dependencies = [
  "argwerk",
  "cidr",
  "env_logger",
+ "libc",
  "log",
  "proxy-protocol",
  "socket2",
