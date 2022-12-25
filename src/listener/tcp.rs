@@ -1,6 +1,17 @@
-use crate::{args::Args, util};
-use std::{io, net::SocketAddr};
-use tokio::net::{TcpSocket, TcpStream};
+use crate::{
+    args::Args,
+    pipe::{splice, wouldblock, Pipe, PIPE_BUF_SIZE},
+    util,
+};
+
+use std::{io, net::SocketAddr, os::fd::AsRawFd};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt, Interest},
+    net::{
+        tcp::{ReadHalf, WriteHalf},
+        TcpSocket, TcpStream,
+    },
+};
 
 pub async fn listen(args: Args) -> io::Result<()> {
     let socket = match args.listen_addr {
@@ -39,15 +50,15 @@ pub async fn listen(args: Args) -> io::Result<()> {
 }
 
 async fn tcp_handle_connection(
-    mut conn: TcpStream,
+    mut src: TcpStream,
     addr: SocketAddr,
     mark: u32,
     ipv4_fwd: SocketAddr,
     ipv6_fwd: SocketAddr,
 ) -> io::Result<()> {
+    src.set_nodelay(true)?;
     let mut buffer = [0u8; u16::MAX as usize];
-    conn.readable().await?;
-    let read_bytes = conn.try_read(&mut buffer)?;
+    let read_bytes = src.read(&mut buffer).await?;
 
     let (addr_pair, mut rest, _version) = util::parse_proxy_protocol_header(&buffer[..read_bytes])?;
     let src_addr = match addr_pair {
@@ -63,11 +74,88 @@ async fn tcp_handle_connection(
     };
     log::info!("[new conn] [origin: {addr} [src: {src_addr}]");
 
-    let mut upstream_conn = util::tcp_create_upstream_conn(src_addr, target_addr, mark).await?;
-    conn.set_nodelay(true)?;
+    let mut dst = util::tcp_create_upstream_conn(src_addr, target_addr, mark).await?;
+    tokio::io::copy_buf(&mut rest, &mut dst).await?;
 
-    tokio::io::copy_buf(&mut rest, &mut upstream_conn).await?;
-    tokio::io::copy_bidirectional(&mut conn, &mut upstream_conn).await?;
+    let (mut sr, mut sw) = src.split();
+    let (mut dr, mut dw) = dst.split();
 
-    Ok(())
+    let src_to_dst = async {
+        splice_copy(&mut sr, &mut dw).await?;
+        dw.shutdown().await
+    };
+    let dst_to_src = async {
+        splice_copy(&mut dr, &mut sw).await?;
+        sw.shutdown().await
+    };
+
+    tokio::try_join!(src_to_dst, dst_to_src).map(|_| ())
+}
+
+// wait for src to be readable
+// splice from src to the pipe buffer
+// wait for dst to be writable
+// splice to dst from the pipe buffer
+async fn splice_copy(src: &mut ReadHalf<'_>, dst: &mut WriteHalf<'_>) -> io::Result<()> {
+    use std::io::{Error, ErrorKind::WouldBlock};
+
+    let pipe = Pipe::new()?;
+    let mut size = 0;
+    let mut done = false;
+
+    let src = src.as_ref();
+    let dst = dst.as_ref();
+    let src_fd = src.as_raw_fd();
+    let dst_fd = dst.as_raw_fd();
+
+    'LOOP: while !done {
+        src.readable().await?;
+        let ret = src.try_io(Interest::READABLE, || {
+            while size < PIPE_BUF_SIZE {
+                match splice(src_fd, pipe.w, PIPE_BUF_SIZE - size) {
+                    r if r > 0 => size += r as usize,
+                    r if r == 0 => {
+                        done = true;
+                        break;
+                    }
+                    r if r < 0 && wouldblock() => {
+                        return Err(Error::new(WouldBlock, "EWOULDBLOCK"))
+                    }
+                    _ => return Err(Error::last_os_error()),
+                }
+            }
+            Ok(())
+        });
+        if let Err(err) = ret {
+            if err.kind() != WouldBlock {
+                break 'LOOP;
+            }
+        }
+
+        dst.writable().await?;
+        let ret = dst.try_io(Interest::WRITABLE, || {
+            while size > 0 {
+                match splice(pipe.r, dst_fd, size) {
+                    r if r > 0 => size -= r as usize,
+                    r if r < 0 && wouldblock() => {
+                        return Err(Error::new(WouldBlock, "EWOULDBLOCK"))
+                    }
+                    _ => return Err(Error::last_os_error()),
+                }
+            }
+            Ok(())
+        });
+
+        if let Err(err) = ret {
+            if err.kind() != WouldBlock {
+                break 'LOOP;
+            }
+        }
+    }
+
+    if done {
+        Ok(())
+    } else {
+        Err(Error::last_os_error())
+    }
 }
