@@ -1,5 +1,6 @@
 mod args;
 mod listener;
+mod pipe;
 mod util;
 
 use env_logger::{Env, DEFAULT_FILTER_ENV};
