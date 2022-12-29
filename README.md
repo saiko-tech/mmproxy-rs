@@ -2,6 +2,8 @@
 
 A Rust implementation of MMProxy! 🚀
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE.md)
+
 ## Rationale
 
 Many previous implementations only support [PROXY Protocol](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) for either TCP or UDP, whereas this version supports both TCP and UDP.
