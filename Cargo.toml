@@ -1,6 +1,7 @@
 [package]
 name = "mmproxy"
 description = "Rust implementation of mmproxy (TCP + UDP)"
+repository = "https://github.com/saiko-tech/mmproxy-rs"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
