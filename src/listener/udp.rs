@@ -1,8 +1,9 @@
+use simple_eyre::eyre::{eyre, Result, WrapErr};
+
 use crate::{args::Args, util};
 use socket2::SockRef;
 use std::{
     collections::HashMap,
-    io,
     net::SocketAddr,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -30,26 +31,32 @@ impl UdpProxyConn {
     }
 }
 
-pub async fn listen(args: Args) -> io::Result<()> {
+pub async fn listen(args: Args) -> Result<()> {
     let socket = {
-        let socket = UdpSocket::bind(args.listen_addr).await?;
+        let socket = UdpSocket::bind(args.listen_addr)
+            .await
+            .wrap_err_with(|| format!("failed to bind to {}", args.listen_addr))?;
+
         let sock_ref = SockRef::from(&socket);
-        sock_ref.set_reuse_port(args.listeners > 1)?;
+        sock_ref
+            .set_reuse_port(args.listeners > 1)
+            .wrap_err("failed to set reuse port on listener socket")?;
+
         Arc::new(socket)
     };
-    log::info!("listening on: {}", socket.local_addr()?);
 
     let mut buffer = [0u8; MAX_DGRAM_SIZE];
     let mut connections = ConnectionsHashMap::new();
     let (conn_tx, mut conn_rx) = mpsc::channel::<SocketAddr>(128);
 
+    log::info!("listening on: {}", args.listen_addr);
     loop {
         tokio::select! {
             // close inactive connections in this branch
             addr = conn_rx.recv() => {
                 if let Some(addr) = addr {
                     if let Some((_conn, handle)) = connections.remove(&addr) {
-                        log::info!("closing {addr} due inactivity");
+                        log::info!("closing {addr} due to inactivity");
                         if !handle.is_finished() {
                             handle.abort();
                         }
@@ -58,7 +65,7 @@ pub async fn listen(args: Args) -> io::Result<()> {
             }
             // handle incoming DGRAM packets in this branch
             ret = socket.recv_from(&mut buffer) => {
-                let (read, addr) = ret?;
+                let (read, addr) = ret.wrap_err("failed to accept connection")?;
 
                 if let Some(ref allowed_subnets) = args.allowed_subnets {
                     let ip_addr = addr.ip();
@@ -79,7 +86,7 @@ pub async fn listen(args: Args) -> io::Result<()> {
                 )
                 .await
                 {
-                    log::error!("while handling connection: {why}");
+                    log::error!("{why:#}");
                 }
             }
         }
@@ -93,18 +100,18 @@ async fn udp_handle_connection(
     buffer: &mut [u8],
     connections: &mut ConnectionsHashMap,
     conn_tx: mpsc::Sender<SocketAddr>,
-) -> io::Result<()> {
+) -> Result<()> {
     let (src_addr, rest, version) = match util::parse_proxy_protocol_header(buffer) {
         Ok((addr_pair, rest, version)) => match addr_pair {
             Some((src, _)) => (src, rest, version),
             None => (addr, rest, version),
         },
-        Err(err) => return Err(err),
+        Err(err) => return Err(err).wrap_err("failed to parse proxy protocol header"),
     };
+
     if version < 2 {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "proxy protocol version 1 doesn't support UDP connections",
+        return Err(eyre!(
+            "proxy protocol version 1 doesn't support UDP connections"
         ));
     }
     let target_addr = match src_addr {
@@ -113,6 +120,10 @@ async fn udp_handle_connection(
     };
 
     let proxy_conn = match connections.get(&addr) {
+        Some((proxy_conn, _handle)) => {
+            proxy_conn.last_activity.fetch_add(1, Ordering::SeqCst);
+            proxy_conn.clone()
+        }
         // first time connecting
         None => {
             if src_addr == addr {
@@ -120,39 +131,29 @@ async fn udp_handle_connection(
             }
             log::info!("[new conn] [origin: {addr}] [src: {src_addr}]");
 
-            let proxy_conn =
-                match util::udp_create_upstream_conn(src_addr, target_addr, args.mark).await {
-                    Ok(sock) => Arc::new(UdpProxyConn::new(sock)),
-                    Err(err) => {
-                        log::error!("failed to create an upstream connection to {target_addr}");
-                        return Err(err);
-                    }
-                };
-
+            let proxy_conn = {
+                let sock = util::udp_create_upstream_conn(src_addr, target_addr, args.mark).await?;
+                Arc::new(UdpProxyConn::new(sock))
+            };
             let sock_clone = socket.clone();
             let proxy_clone1 = proxy_conn.clone();
 
-            let close_after = args.close_after;
             let handle = tokio::spawn(async move {
                 if let Err(why) =
                     udp_copy_upstream_to_downstream(addr, src_addr, sock_clone, proxy_clone1).await
                 {
-                    log::error!("while copying from upstream to downstream [{src_addr}]: {why}");
+                    log::error!("{why:#}");
                 };
             });
             tokio::spawn(udp_close_after_inactivity(
                 addr,
-                close_after,
+                args.close_after,
                 conn_tx.clone(),
                 proxy_conn.clone(),
             ));
 
             connections.insert(addr, (proxy_conn.clone(), handle));
             proxy_conn
-        }
-        Some((proxy_conn, _handle)) => {
-            proxy_conn.last_activity.fetch_add(1, Ordering::SeqCst);
-            proxy_conn.clone()
         }
     };
 
@@ -161,10 +162,7 @@ async fn udp_handle_connection(
             log::debug!("from [{}] to [{}], size: {}", src_addr, addr, size);
             Ok(())
         }
-        Err(err) => {
-            log::error!("failed to write data to upstream connection");
-            Err(err)
-        }
+        Err(err) => Err(err).wrap_err("failed to write data to upstream connection"),
     }
 }
 
@@ -173,17 +171,14 @@ async fn udp_copy_upstream_to_downstream(
     src_addr: SocketAddr,
     downstream: Arc<UdpSocket>,
     proxy_conn: Arc<UdpProxyConn>,
-) -> io::Result<()> {
+) -> Result<()> {
     let mut buffer = [0u8; MAX_DGRAM_SIZE];
 
     loop {
         let read_bytes = proxy_conn.upstream_conn.recv(&mut buffer).await?;
         let sent_bytes = downstream.send_to(&buffer[..read_bytes], addr).await?;
         if sent_bytes == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "couldn't sent anything to downstream",
-            ));
+            return Err(eyre!("couldn't sent anything to downstream"));
         }
         log::debug!("from [{}] to [{}], size: {}", addr, src_addr, sent_bytes);
 

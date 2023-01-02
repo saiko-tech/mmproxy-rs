@@ -1,3 +1,5 @@
+use simple_eyre::eyre::{Result, WrapErr};
+
 use std::{
     fs::File,
     io::{self, Read},
@@ -53,14 +55,23 @@ pub fn parse_allowed_subnets(path: &str) -> io::Result<Vec<cidr::IpCidr>> {
     Ok(data)
 }
 
-fn setup_socket(socket_ref: &SockRef, src: SocketAddr, mark: u32) -> io::Result<()> {
+fn setup_socket(socket_ref: &SockRef, src: SocketAddr, mark: u32) -> Result<()> {
     // needs CAP_NET_ADMIN
-    socket_ref.set_ip_transparent(true)?;
-
-    socket_ref.set_nonblocking(true)?;
-    socket_ref.set_reuse_address(true)?;
-    socket_ref.set_mark(mark)?;
-    socket_ref.bind(&src.into())?;
+    socket_ref
+        .set_ip_transparent(true)
+        .wrap_err("failed to set ip transparent on the upstream socket")?;
+    socket_ref
+        .set_nonblocking(true)
+        .wrap_err("failed to set nonblocking on the upstream socket")?;
+    socket_ref
+        .set_reuse_address(true)
+        .wrap_err("failed to set reuse address on the upstream socket")?;
+    socket_ref
+        .set_mark(mark)
+        .wrap_err("failed to set mark on the upstream socket")?;
+    socket_ref
+        .bind(&src.into())
+        .wrap_err("failed to set source address for the upstream socket")?;
 
     Ok(())
 }
@@ -69,36 +80,49 @@ pub async fn tcp_create_upstream_conn(
     src: SocketAddr,
     target: SocketAddr,
     mark: u32,
-) -> io::Result<TcpStream> {
+) -> Result<TcpStream> {
     let socket = match src {
-        SocketAddr::V4(_) => TcpSocket::new_v4()?,
-        SocketAddr::V6(_) => TcpSocket::new_v6()?,
+        SocketAddr::V4(_) => TcpSocket::new_v4(),
+        SocketAddr::V6(_) => TcpSocket::new_v6(),
     };
-
+    let socket = socket.wrap_err("failed to create the upstream socket")?;
     let socket_ref = SockRef::from(&socket);
-    socket_ref.set_nodelay(true)?;
+
+    socket_ref
+        .set_nodelay(true)
+        .wrap_err("failed to set nodelay on the upstream socket")?;
     setup_socket(&socket_ref, src, mark)?;
 
-    socket.connect(target).await
+    socket
+        .connect(target)
+        .await
+        .wrap_err("failed to connect to the upstream server")
 }
 
 pub async fn udp_create_upstream_conn(
     src: SocketAddr,
     target: SocketAddr,
     mark: u32,
-) -> io::Result<UdpSocket> {
+) -> Result<UdpSocket> {
     let socket = match src {
-        SocketAddr::V4(_) => Socket::new(Domain::IPV4, Type::DGRAM, None)?,
-        SocketAddr::V6(_) => Socket::new(Domain::IPV6, Type::DGRAM, None)?,
+        SocketAddr::V4(_) => Socket::new(Domain::IPV4, Type::DGRAM, None),
+        SocketAddr::V6(_) => Socket::new(Domain::IPV6, Type::DGRAM, None),
     };
+    let socket = socket.wrap_err("failed to create upstream socket")?;
 
     setup_socket(&SockRef::from(&socket), src, mark)?;
-    let udp_socket = UdpSocket::from_std(socket.into())?;
-    udp_socket.connect(target).await?;
+    let udp_socket = UdpSocket::from_std(socket.into())
+        .wrap_err("failed to cast socket2 socket to tokio socket")?;
+
+    udp_socket
+        .connect(target)
+        .await
+        .wrap_err("failed to connecto to the upstream server")?;
 
     Ok(udp_socket)
 }
 
+// TODO: revise this
 pub fn parse_proxy_protocol_header(mut buffer: &[u8]) -> ProxyProtocolResult {
     match proxy_protocol::parse(&mut buffer) {
         Ok(result) => match result {
