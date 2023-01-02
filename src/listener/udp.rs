@@ -18,14 +18,14 @@ type ConnectionsHashMap = HashMap<SocketAddr, (Arc<UdpProxyConn>, JoinHandle<()>
 
 #[derive(Debug)]
 struct UdpProxyConn {
-    pub upstream_conn: UdpSocket,
+    pub sock: UdpSocket,
     pub last_activity: AtomicU64,
 }
 
 impl UdpProxyConn {
-    fn new(upstream_conn: UdpSocket) -> Self {
+    fn new(sock: UdpSocket) -> Self {
         Self {
-            upstream_conn,
+            sock,
             last_activity: AtomicU64::new(0),
         }
     }
@@ -47,19 +47,17 @@ pub async fn listen(args: Args) -> Result<()> {
 
     let mut buffer = [0u8; MAX_DGRAM_SIZE];
     let mut connections = ConnectionsHashMap::new();
-    let (conn_tx, mut conn_rx) = mpsc::channel::<SocketAddr>(128);
+    let (tx, mut rx) = mpsc::channel::<SocketAddr>(128);
 
     log::info!("listening on: {}", args.listen_addr);
     loop {
         tokio::select! {
             // close inactive connections in this branch
-            addr = conn_rx.recv() => {
+            addr = rx.recv() => {
                 if let Some(addr) = addr {
                     if let Some((_conn, handle)) = connections.remove(&addr) {
                         log::info!("closing {addr} due to inactivity");
-                        if !handle.is_finished() {
-                            handle.abort();
-                        }
+                        handle.abort();
                     }
                 }
             }
@@ -82,7 +80,7 @@ pub async fn listen(args: Args) -> Result<()> {
                     addr,
                     &mut buffer[..read],
                     &mut connections,
-                    conn_tx.clone(),
+                    tx.clone(),
                 )
                 .await
                 {
@@ -95,11 +93,11 @@ pub async fn listen(args: Args) -> Result<()> {
 
 async fn udp_handle_connection(
     args: &Args,
-    socket: Arc<UdpSocket>,
+    src: Arc<UdpSocket>,
     addr: SocketAddr,
     buffer: &mut [u8],
     connections: &mut ConnectionsHashMap,
-    conn_tx: mpsc::Sender<SocketAddr>,
+    tx: mpsc::Sender<SocketAddr>,
 ) -> Result<()> {
     let (src_addr, rest, version) = match util::parse_proxy_protocol_header(buffer) {
         Ok((addr_pair, rest, version)) => match addr_pair {
@@ -119,10 +117,10 @@ async fn udp_handle_connection(
         SocketAddr::V6(_) => args.ipv6_fwd,
     };
 
-    let proxy_conn = match connections.get(&addr) {
-        Some((proxy_conn, _handle)) => {
-            proxy_conn.last_activity.fetch_add(1, Ordering::SeqCst);
-            proxy_conn.clone()
+    let dst = match connections.get(&addr) {
+        Some((dst, _handle)) => {
+            dst.last_activity.fetch_add(1, Ordering::SeqCst);
+            dst.clone()
         }
         // first time connecting
         None => {
@@ -131,77 +129,75 @@ async fn udp_handle_connection(
             }
             log::info!("[new conn] [origin: {addr}] [src: {src_addr}]");
 
-            let proxy_conn = {
+            let dst = {
                 let sock = util::udp_create_upstream_conn(src_addr, target_addr, args.mark).await?;
                 Arc::new(UdpProxyConn::new(sock))
             };
-            let sock_clone = socket.clone();
-            let proxy_clone1 = proxy_conn.clone();
 
+            let src_clone = src.clone();
+            let dst_clone = dst.clone();
             let handle = tokio::spawn(async move {
-                if let Err(why) =
-                    udp_copy_upstream_to_downstream(addr, src_addr, sock_clone, proxy_clone1).await
-                {
+                if let Err(why) = udp_dst_to_src(addr, src_addr, src_clone, dst_clone).await {
                     log::error!("{why:#}");
                 };
             });
             tokio::spawn(udp_close_after_inactivity(
                 addr,
                 args.close_after,
-                conn_tx.clone(),
-                proxy_conn.clone(),
+                tx.clone(),
+                dst.clone(),
             ));
 
-            connections.insert(addr, (proxy_conn.clone(), handle));
-            proxy_conn
+            connections.insert(addr, (dst.clone(), handle));
+            dst
         }
     };
 
-    match proxy_conn.upstream_conn.send(rest).await {
+    match dst.sock.send(rest).await {
         Ok(size) => {
             log::debug!("from [{}] to [{}], size: {}", src_addr, addr, size);
             Ok(())
         }
-        Err(err) => Err(err).wrap_err("failed to write data to upstream connection"),
+        Err(err) => Err(err).wrap_err("failed to write data to the upstream connection"),
     }
 }
 
-async fn udp_copy_upstream_to_downstream(
+async fn udp_dst_to_src(
     addr: SocketAddr,
     src_addr: SocketAddr,
-    downstream: Arc<UdpSocket>,
-    proxy_conn: Arc<UdpProxyConn>,
+    src: Arc<UdpSocket>,
+    dst: Arc<UdpProxyConn>,
 ) -> Result<()> {
     let mut buffer = [0u8; MAX_DGRAM_SIZE];
 
     loop {
-        let read_bytes = proxy_conn.upstream_conn.recv(&mut buffer).await?;
-        let sent_bytes = downstream.send_to(&buffer[..read_bytes], addr).await?;
+        let read_bytes = dst.sock.recv(&mut buffer).await?;
+        let sent_bytes = src.send_to(&buffer[..read_bytes], addr).await?;
         if sent_bytes == 0 {
             return Err(eyre!("couldn't sent anything to downstream"));
         }
         log::debug!("from [{}] to [{}], size: {}", addr, src_addr, sent_bytes);
 
-        proxy_conn.last_activity.fetch_add(1, Ordering::SeqCst);
+        dst.last_activity.fetch_add(1, Ordering::SeqCst);
     }
 }
 
 async fn udp_close_after_inactivity(
     addr: SocketAddr,
     close_after: Duration,
-    conn_tx: mpsc::Sender<SocketAddr>,
-    proxy_conn: Arc<UdpProxyConn>,
+    tx: mpsc::Sender<SocketAddr>,
+    dst: Arc<UdpProxyConn>,
 ) {
-    let mut last_activity = proxy_conn.last_activity.load(Ordering::SeqCst);
+    let mut last_activity = dst.last_activity.load(Ordering::SeqCst);
     loop {
         tokio::time::sleep(close_after).await;
-        if proxy_conn.last_activity.load(Ordering::SeqCst) == last_activity {
+        if dst.last_activity.load(Ordering::SeqCst) == last_activity {
             break;
         }
-        last_activity = proxy_conn.last_activity.load(Ordering::SeqCst);
+        last_activity = dst.last_activity.load(Ordering::SeqCst);
     }
 
-    if let Err(why) = conn_tx.send(addr).await {
+    if let Err(why) = tx.send(addr).await {
         log::error!("couldn't send the close command to conn channel: {why}");
     }
 }
