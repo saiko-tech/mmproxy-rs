@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, ptr::null_mut};
 
 pub const PIPE_BUF_SIZE: usize = 1 << 20;
 
@@ -23,7 +23,10 @@ impl Pipe {
         };
 
         unsafe {
-            if libc::fcntl(pipes[0], libc::F_SETPIPE_SZ, 1 << 20) < 0 {
+            if libc::fcntl(pipes[0], libc::F_SETPIPE_SZ, PIPE_BUF_SIZE) < 0 {
+                libc::close(pipes[0]);
+                libc::close(pipes[1]);
+
                 return Err(io::Error::last_os_error());
             }
         }
@@ -48,9 +51,9 @@ pub fn splice(r: i32, w: i32, n: usize) -> isize {
     unsafe {
         libc::splice(
             r,
-            std::ptr::null_mut::<libc::loff_t>(),
+            null_mut::<libc::loff_t>(),
             w,
-            std::ptr::null_mut::<libc::loff_t>(),
+            null_mut::<libc::loff_t>(),
             n,
             libc::SPLICE_F_MOVE | libc::SPLICE_F_NONBLOCK,
         )
