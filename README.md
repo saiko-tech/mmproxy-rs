@@ -17,6 +17,27 @@ Another reason to choose mmproxy-rs may be if you want to avoid interference fro
 - [x] UDP - Accepts PROXY Protocol enabled requests from [udppp](https://github.com/b23r0/udppp), [Cloudflare Spectrum](https://www.cloudflare.com/products/cloudflare-spectrum/)
 - [x] No Garbage Collection pauses
 
+## Requirements
+
+Install Rust with [rustup](https://rustup.rs/) if you haven't already.
+
+```sh
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+$ cargo --version
+```
+
+## Installation
+
+From git:
+```sh
+cargo install --git https://github.com/saiko-tech/mmproxy-rs
+```
+
+From [crates.io](https://crates.io/crates/mmproxy)
+```sh
+cargo install mmproxy
+```
+
 ## Usage
 
 ```
@@ -46,27 +67,6 @@ Options:
                           tcp)
   -m, --mark <n>          The mark that will be set on outbound packets.
                           (default: 0)
-```
-
-## Requirements
-
-Install Rust with [rustup](https://rustup.rs/) if you haven't already.
-
-```sh
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-$ cargo --version
-```
-
-## Installation
-
-From git:
-```sh
-cargo install --git https://github.com/saiko-tech/mmproxy-rs
-```
-
-From [crates.io](https://crates.io/crates/mmproxy)
-```sh
-cargo install mmproxy
 ```
 
 ### Example
