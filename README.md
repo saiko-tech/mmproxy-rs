@@ -17,7 +17,38 @@ Another reason to choose mmproxy-rs may be if you want to avoid interference fro
 - [x] UDP - Accepts PROXY Protocol enabled requests from [udppp](https://github.com/b23r0/udppp), [Cloudflare Spectrum](https://www.cloudflare.com/products/cloudflare-spectrum/)
 - [x] No Garbage Collection pauses
 
-## Installation
+## Usage
+
+```
+Usage: mmproxy [-h] [options]
+
+Options:
+  -h, --help              Prints the help string.
+  -4, --ipv4 <addr>       Address to which IPv4 traffic will be forwarded to.
+                          (default: "127.0.0.1:443")
+  -6, --ipv6 <addr>       Address to which IPv6 traffic will be forwarded to.
+                          (default: "[::1]:443")
+
+  -a, --allowed-subnets <path>
+                          Path to a file that contains allowed subnets of the
+                          proxy servers.
+
+  -c, --close-after <n>   Number of seconds after which UDP socket will be
+                          cleaned up. (default: 60)
+
+  -l, --listen-addr <string>
+                          Address the proxy listens on. (default:
+                          "0.0.0.0:8443")
+
+  --listeners <n>         Number of listener sockets that will be opened for the
+                          listen address. (Linux 3.9+) (default: 1)
+  -p, --protocol <p>      Protocol that will be proxied: tcp, udp. (default:
+                          tcp)
+  -m, --mark <n>          The mark that will be set on outbound packets.
+                          (default: 0)
+```
+
+## Requirements
 
 Install Rust with [rustup](https://rustup.rs/) if you haven't already.
 
@@ -26,23 +57,16 @@ $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 $ cargo --version
 ```
 
-### Installing with Cargo
+## Installation
 
+From git:
 ```sh
-# install from the main branch
-$ cargo install --git https://github.com/saiko-tech/mmproxy-rs
-# install directly from crates.io
-$ cargo install mmproxy
-$ mmproxy -h
+cargo install --git https://github.com/saiko-tech/mmproxy-rs
 ```
 
-### Building from source
-
+From [crates.io](https://crates.io/crates/mmproxy)
 ```sh
-$ git clone https://github.com/saiko-tech/mmproxy-rs
-$ cd mmproxy-rs
-$ cargo build --release
-$ ./target/release/mmproxy -h
+cargo install mmproxy
 ```
 
 ### Example
@@ -50,12 +74,12 @@ $ ./target/release/mmproxy -h
 You'll need root permissions or `CAP_NET_ADMIN` capability set on the mmproxy binary with [setcap(8)](https://man7.org/linux/man-pages/man8/setcap.8.html).
 
 ```sh
-$ address=X.X.X.X # get this via "ip addr" command - don't use 0.0.0.0!
-$ bind_port=8080
-$ upstream_port=8081
-$ sudo ip rule add from 127.0.0.1/8 iif lo table 123
-$ sudo ip route add local 0.0.0.0/0 dev lo table 123
-$ sudo mmproxy -m 123 -l $address:$bind_port -4 127.0.0.1:$upstream_port -p udp
+address=X.X.X.X # get this via "ip addr" command - don't use 0.0.0.0!
+bind_port=8080
+upstream_port=8081
+sudo ip rule add from 127.0.0.1/8 iif lo table 123
+sudo ip route add local 0.0.0.0/0 dev lo table 123
+sudo mmproxy -m 123 -l $address:$bind_port -4 127.0.0.1:$upstream_port -p udp
 ```
 
 ## Benchmarking
