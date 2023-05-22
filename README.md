@@ -38,6 +38,11 @@ From [crates.io](https://crates.io/crates/mmproxy)
 cargo install mmproxy
 ```
 
+Via Docker (ghcr.io):
+```sh
+docker run ghcr.io/saiko-tech/mmproxy-rs:main --help
+```
+
 ## Usage
 
 ```
