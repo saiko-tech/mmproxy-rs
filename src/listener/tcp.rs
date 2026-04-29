@@ -139,55 +139,59 @@ async fn splice_copy(src: &mut ReadHalf<'_>, dst: &mut WriteHalf<'_>) -> Result<
     let src_fd = src.as_raw_fd();
     let dst_fd = dst.as_raw_fd();
 
-    while !done {
-        src.readable()
-            .await
-            .wrap_err("awaiting on readable failed")?;
-        let ret = src.try_io(Interest::READABLE, || {
-            while size < PIPE_BUF_SIZE {
-                match splice(src_fd, pipe.w, PIPE_BUF_SIZE - size) {
-                    r if r > 0 => size += r as usize,
-                    r if r == 0 => {
-                        done = true;
-                        break;
+    while !done || size > 0 {
+        if !done {
+            src.readable()
+                .await
+                .wrap_err("awaiting on readable failed")?;
+            let ret = src.try_io(Interest::READABLE, || {
+                while size < PIPE_BUF_SIZE {
+                    match splice(src_fd, pipe.w, PIPE_BUF_SIZE - size) {
+                        r if r > 0 => size += r as usize,
+                        r if r == 0 => {
+                            done = true;
+                            break;
+                        }
+                        r if r < 0 && wouldblock() => {
+                            return Err(Error::new(WouldBlock, "EWOULDBLOCK"))
+                        }
+                        _ => return Err(Error::last_os_error()),
                     }
-                    r if r < 0 && wouldblock() => {
-                        return Err(Error::new(WouldBlock, "EWOULDBLOCK"))
-                    }
-                    _ => return Err(Error::last_os_error()),
                 }
-            }
-            Ok(())
-        });
-        if let Err(err) = ret {
-            if err.kind() != WouldBlock {
-                break;
+                Ok(())
+            });
+            if let Err(err) = ret {
+                if err.kind() != WouldBlock {
+                    break;
+                }
             }
         }
 
-        dst.writable()
-            .await
-            .wrap_err("awaiting on writable failed")?;
-        let ret = dst.try_io(Interest::WRITABLE, || {
-            while size > 0 {
-                match splice(pipe.r, dst_fd, size) {
-                    r if r > 0 => size -= r as usize,
-                    r if r < 0 && wouldblock() => {
-                        return Err(Error::new(WouldBlock, "EWOULDBLOCK"))
+        if size > 0 {
+            dst.writable()
+                .await
+                .wrap_err("awaiting on writable failed")?;
+            let ret = dst.try_io(Interest::WRITABLE, || {
+                while size > 0 {
+                    match splice(pipe.r, dst_fd, size) {
+                        r if r > 0 => size -= r as usize,
+                        r if r < 0 && wouldblock() => {
+                            return Err(Error::new(WouldBlock, "EWOULDBLOCK"))
+                        }
+                        _ => return Err(Error::last_os_error()),
                     }
-                    _ => return Err(Error::last_os_error()),
                 }
-            }
-            Ok(())
-        });
-        if let Err(err) = ret {
-            if err.kind() != WouldBlock {
-                break;
+                Ok(())
+            });
+            if let Err(err) = ret {
+                if err.kind() != WouldBlock {
+                    break;
+                }
             }
         }
     }
 
-    if done {
+    if done && size == 0 {
         Ok(())
     } else {
         Err(Error::last_os_error().into())
